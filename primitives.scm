@@ -82,32 +82,25 @@
         (ni native-impl))
     (lambda (message . args)
       (case message
-        (call
-         (let ((env (get-env (car args)))
-               (arg-list (get-args (cdr args))))
-           (if (= ac (length arg-list))
-               (apply ni (map-eval env arg-list)); evaluate
-               (arity-error nm ac (length arg-list))
-           ) ; if
-          ) ; let -- env & arg-list
-        ) ; case -- call
-        (to-string (string-append "[primitive procedure " (symbol->string nm) "]"))
-      ) ; case message
+        (call (let ((arg-list (get-args args)))
+                (if (= ac (length arg-list))
+                    (apply ni arg-list)
+                    (arity-error nm ac (length arg-list))
+                ) ; if -- arity check
+              ) ; let -- arg-list
+        ) ; 'call handler
+        (to-string
+         (string-append "[primitive procedure " (symbol->string nm) "]")
+        ) ; 'to-string handler
+      ) ; case
     ) ; lambda
   ); let
 ); define
 
-(define (get-env env)
-  (if (list? env)
-      (car env)
-      env
-)
-
-        
 (define (get-args args)
-  (if (list? args)
-      (car args)
-      args
+  (cond ((null? (car args)) (cadr args)) ; call from scheme-eval
+        ((list? (car args)) (car args)) ; call from divide-checked
+        (else (map-eval (car args) (cdr args))) ; local call
   )
 )
 
@@ -136,15 +129,20 @@
 ; type. The returned procedure also checks that the arguments have
 ; valid values for a division-like operation.
 (define (divide-checked name arg-count test typename impl)
-  (let ((nm name)
-        (tc (type-checked name arg-count test typename impl)))
+  (let ((tc (type-checked name arg-count test typename impl)))
     (lambda (message . args)
       (case message
-        (call args)
-        (to-string (string-append "[primitive procedure " (symbol->string nm) "]"))
-      ) ; case
-    ) ; lambda
-  ); let
+        (call (let ((arg-list (map-eval (car args) (cdr args))))
+                (if (= 0 (cadr arg-list))
+                    (error "cannot divide by zero")
+                    (tc 'call arg-list)
+                )
+              )
+        )
+        (to-string (tc 'to-string))
+      )
+    )
+  )
 ); define
 
 

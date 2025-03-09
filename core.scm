@@ -26,9 +26,11 @@
          ; special form. Use procedure? to check this. Send the 'call
          ; message to the host procedure, along with the necessary
          ; arguments, to invoke it.
-         (if (procedure? (car datum))
-             ((car datum) 'call '() (map-eval env (cdr datum)))
-             (error "cannot evaluate procedure")
+         (let ((proc (get-proc datum env)))
+           (if (procedure? proc)
+               (proc 'call '() (map-eval env (cdr datum)))
+               (error "not a procedure" proc)
+           )
          )
         )
         ; Add a case for symbols (identifiers) here.
@@ -39,6 +41,14 @@
          )
         )
         (else (error "cannot evaluate" datum))
+  )
+)
+
+(define (get-proc datum env)
+  (cond ((null? datum) (error "cannot evaluate null"))
+        ((procedure? (car datum)) (car datum))
+        ((list? (car datum)) (scheme-eval (car datum) env))
+        (else (error "cannot evaluate procedure" datum))
   )
 )
 
@@ -132,7 +142,15 @@
 ;   [syntax <name>]
 ; where <name> is the name passed in to primitive-procedure.
 (define (special-form name native-impl)
-  '()  ; replace with your solution
+  (let ((nm name)
+        (ni native-impl))
+    (lambda (message . args)
+      (case message
+        (call (apply ni args))
+        (to-string (string-append "[syntax " (symbol->string nm) "]"))
+      )
+    )
+  )
 )
 
 
