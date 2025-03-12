@@ -48,6 +48,11 @@
   (cond ((null? datum) (error "cannot evaluate null"))
         ((procedure? (car datum)) (car datum))
         ((list? (car datum)) (scheme-eval (car datum) env))
+        ((symbol? (car datum)) (if (env 'contains (car datum))
+                                   (env 'get (car datum))
+                                   (error "unknown procedure symbol")
+                               )
+        )
         (else (error "cannot evaluate procedure" datum))
   )
 )
@@ -56,20 +61,34 @@
 ; Implements the begin form, which consists of a sequence of
 ; expressions.
 (define (scheme-begin env . args)
-  '()  ; replace with your solution
+  (begin-helper env args)
+)
+
+(define (begin-helper env args)
+  (if (= 1 (length args))
+      (scheme-eval (car args) env)
+      (begin (scheme-eval (car args) env)
+             (begin-helper env (cdr args)) 
+      )
+  )
 )
 
 
 ; Implements a conditional, with a test, a then expression, and an
 ; optional else expression.
 (define (scheme-if env . args)
-  '()  ; replace with your solution
+  (if (scheme-eval (car args) env)
+      (cadr args)
+      (if (> (length args) 2)
+          (scheme-eval (caddr args) env)
+      )
+  )
 )
 
 
 ; Implements the quote form.
 (define (scheme-quote env . args)
-  '()  ; replace with your solution
+  (car args)
 )
 
 
@@ -95,7 +114,41 @@
 ;   [lambda procedure <name>]
 ; where <name> is the name passed in to primitive-procedure.
 (define (lambda-procedure name formals body parent-env)
-  '()  ; replace with your solution
+  (let ((nm name)
+        (frmls formals)
+        (bd (car body))
+        (prnt parent-env))
+    (lambda (message . args)
+      (case message
+        ('call (if (= (length frmls) (length (cdr args)))
+                   (let ((frm (lambda-args (frame prnt) frmls (map-eval (car args) (cdr args)))))
+                     (scheme-eval bd frm)
+                   )
+                   (arity-error nm (length frmls) (length (cdr args)))
+               )
+         )
+        ('to-string (string-append "[lambda procedure " (symbol->string nm) "]"))
+      ) ; case
+    ) ; lambda
+  ) ; let
+) ; define
+
+(define (lambda-args frm frmls args)
+  (if (null? args)
+      frm
+      (begin (frm 'insert (car frmls) (car args))
+             (lambda-args frm (cdr frmls) (cdr args))
+      )
+  )
+)
+
+(define (eval-args frame env formals args)
+  (if (null? args)
+      frame
+      (begin (frame 'insert (car formals) (car args))
+             (eval-args frame env (cdr formals) (cdr args))
+      )
+  )
 )
 
 
