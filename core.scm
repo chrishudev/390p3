@@ -50,7 +50,7 @@
         ((list? (car datum)) (scheme-eval (car datum) env))
         ((symbol? (car datum)) (if (env 'contains (car datum))
                                    (env 'get (car datum))
-                                   (error "unknown procedure symbol")
+                                   (error "unknown procedure symbol" (car datum))
                                )
         )
         (else (error "cannot evaluate procedure" datum))
@@ -116,22 +116,31 @@
 (define (lambda-procedure name formals body parent-env)
   (let ((nm name)
         (frmls formals)
-        (bd (car body))
+        (bd body)
         (prnt parent-env))
     (lambda (message . args)
       (case message
-        ('call (if (= (length frmls) (length (cdr args)))
-                   (let ((frm (lambda-args (frame prnt) frmls (map-eval (car args) (cdr args)))))
-                     (scheme-eval bd frm)
-                   )
-                   (arity-error nm (length frmls) (length (cdr args)))
+        ('call (let ((arg-list (get-args args)))
+                 (if (= (length frmls) (length arg-list))
+                     (let ((frm (lambda-args (frame prnt) frmls arg-list)))
+                       (body-call '() bd frm)
+                     )
+                     (arity-error nm (length frmls) (length (cdr args)))
+                 )
                )
-         )
+        )
         ('to-string (string-append "[lambda procedure " (symbol->string nm) "]"))
       ) ; case
     ) ; lambda
   ) ; let
 ) ; define
+
+(define (body-call prev body env)
+  (if (= 1 (length body))
+      (scheme-eval (car body) env)
+      (body-call (scheme-eval (car body) env) (cdr body) env)
+  )
+)
 
 (define (lambda-args frm frmls args)
   (if (null? args)
@@ -160,7 +169,7 @@
 ; Use lambda-procedure to create the actual representation of the
 ; procedure.
 (define (scheme-lambda env . args)
-  '()  ; replace with your solution
+  (lambda-procedure "lambda" (car args) (cdr args) env)
 )
 
 
@@ -174,7 +183,18 @@
 ; For procedure definitions, use lambda-procedure to create the actual
 ; representation of the procedure.
 (define (scheme-define env . args)
-  '()  ; replace with your solution
+  (let ((key (car args))
+        (value (cadr args)))
+    (if (list? key)
+        (define-insert (car key) (lambda-procedure (car key) (cdr key) value env) env)
+        (define-insert key value env)
+    )
+  )
+)
+
+(define (define-insert key value env)
+  (env 'insert key value)
+  value
 )
 
 

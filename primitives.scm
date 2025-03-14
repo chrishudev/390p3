@@ -89,9 +89,7 @@
                 ) ; if -- arity check
               ) ; let -- arg-list
         ) ; 'call handler
-        (to-string
-         (string-append "[primitive procedure " (symbol->string nm) "]")
-        ) ; 'to-string handler
+        (to-string (string-append "[primitive procedure " (symbol->string nm) "]"))
       ) ; case
     ) ; lambda
   ); let
