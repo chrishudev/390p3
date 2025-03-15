@@ -26,11 +26,34 @@
          ; special form. Use procedure? to check this. Send the 'call
          ; message to the host procedure, along with the necessary
          ; arguments, to invoke it.
-         '()  ; replace with your solution
+         (let ((proc (get-proc datum env)))
+           (if (procedure? proc)
+               (proc 'call '() (map-eval env (cdr datum)))
+               (error "not a procedure" proc)
+           )
+         )
         )
-        ((symbol? datum) '())
         ; Add a case for symbols (identifiers) here.
+        ((symbol? datum)
+         (if (env 'contains datum)
+             (env 'get datum)
+             (error "unknown identifier" datum)
+         )
+        )
         (else (error "cannot evaluate" datum))
+  )
+)
+
+(define (get-proc datum env)
+  (cond ((null? datum) (error "cannot evaluate null"))
+        ((procedure? (car datum)) (car datum))
+        ((list? (car datum)) (scheme-eval (car datum) env))
+        ((symbol? (car datum)) (if (env 'contains (car datum))
+                                   (env 'get (car datum))
+                                   (error "unknown procedure symbol" (car datum))
+                               )
+        )
+        (else (error "cannot evaluate procedure" datum))
   )
 )
 
@@ -38,20 +61,34 @@
 ; Implements the begin form, which consists of a sequence of
 ; expressions.
 (define (scheme-begin env . args)
-  '()  ; replace with your solution
+  (begin-helper env args)
+)
+
+(define (begin-helper env args)
+  (if (= 1 (length args))
+      (scheme-eval (car args) env)
+      (begin (scheme-eval (car args) env)
+             (begin-helper env (cdr args)) 
+      )
+  )
 )
 
 
 ; Implements a conditional, with a test, a then expression, and an
 ; optional else expression.
 (define (scheme-if env . args)
-  '()  ; replace with your solution
+  (if (scheme-eval (car args) env)
+      (cadr args)
+      (if (> (length args) 2)
+          (scheme-eval (caddr args) env)
+      )
+  )
 )
 
 
 ; Implements the quote form.
 (define (scheme-quote env . args)
-  '()  ; replace with your solution
+  (car args)
 )
 
 
@@ -77,7 +114,53 @@
 ;   [lambda procedure <name>]
 ; where <name> is the name passed in to primitive-procedure.
 (define (lambda-procedure name formals body parent-env)
-  '()  ; replace with your solution
+  (let ((nm name)
+        (frmls formals)
+        (bd body)
+        (prnt parent-env))
+    (lambda (message . args)
+      (case message
+        ('call (let ((arg-list (get-args args)))
+                 (if (= (length frmls) (length arg-list))
+                     (let ((frm (lambda-args (frame prnt) frmls arg-list)))
+                       (body-call '() bd frm)
+                     )
+                     (arity-error nm (length frmls) (length (cdr args)))
+                 )
+               )
+        )
+        ('to-string (string-append "[lambda procedure " (symbol->string nm) "]"))
+      ) ; case
+    ) ; lambda
+  ) ; let
+) ; define
+
+(define (body-call prev body env) ; TODO: check as point of failure
+  (if (null? body)
+      prev
+      (
+  (if (= 1 (length body))
+      (scheme-eval (car body) env)
+      (body-call (scheme-eval (car body) env) (cdr body) env)
+  )
+)
+
+(define (lambda-args frm frmls args)
+  (if (null? args)
+      frm
+      (begin (frm 'insert (car frmls) (car args))
+             (lambda-args frm (cdr frmls) (cdr args))
+      )
+  )
+)
+
+(define (eval-args frame env formals args)
+  (if (null? args)
+      frame
+      (begin (frame 'insert (car formals) (car args))
+             (eval-args frame env (cdr formals) (cdr args))
+      )
+  )
 )
 
 
@@ -89,7 +172,7 @@
 ; Use lambda-procedure to create the actual representation of the
 ; procedure.
 (define (scheme-lambda env . args)
-  '()  ; replace with your solution
+  (lambda-procedure "lambda" (car args) (cdr args) env)
 )
 
 
@@ -103,7 +186,18 @@
 ; For procedure definitions, use lambda-procedure to create the actual
 ; representation of the procedure.
 (define (scheme-define env . args)
-  '()  ; replace with your solution
+  (let ((key (car args))
+        (value (cadr args)))
+    (if (list? key)
+        (define-insert (car key) (lambda-procedure (car key) (cdr key) value env) env)
+        (define-insert key value env)
+    )
+  )
+)
+
+(define (define-insert key value env)
+  (env 'insert key value)
+  value
 )
 
 
@@ -124,7 +218,15 @@
 ;   [syntax <name>]
 ; where <name> is the name passed in to primitive-procedure.
 (define (special-form name native-impl)
-  '()  ; replace with your solution
+  (let ((nm name)
+        (ni native-impl))
+    (lambda (message . args)
+      (case message
+        (call (apply ni args))
+        (to-string (string-append "[syntax " (symbol->string nm) "]"))
+      )
+    )
+  )
 )
 
 

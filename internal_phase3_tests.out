@@ -1,0 +1,37 @@
+Running special-form tests...
+pass
+pass
+pass
+Running scheme-begin tests...
+pass
+pass
+Running scheme-if tests...
+pass
+pass
+pass
+Running scheme-quote tests...
+pass
+pass
+Running lambda-procedure tests...
+pass
+pass
+pass
+pass
+pass
+pass
+pass
+pass
+pass
+Running scheme-lambda tests...
+pass
+pass
+pass
+pass
+pass
+Running scheme-define tests...
+pass
+Error: -5 not equal? to -8
+Running error tests...
+Error: expected error, but no error was signaled; result of expression: 3
+Error: expected error, but no error was signaled; result of expression: 4
+Error: expected error, but no error was signaled; result of expression: #<procedure:...tacircular/core.scm:121:4>
