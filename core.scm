@@ -26,9 +26,19 @@
          ; special form. Use procedure? to check this. Send the 'call
          ; message to the host procedure, along with the necessary
          ; arguments, to invoke it.
-         ;(display datum)
-         ;(newline)
-         (cond ((equal? 'define (car datum)) (call-define (cdr datum) env))
+         (cond ((equal? 'define (car datum))
+                (scheme-define env (cadr datum) (caddr datum))
+                (if (list? (cadr datum))
+                    (caadr datum)
+                    (cadr datum)
+                )
+               )
+               ((equal? 'begin (car datum))
+                (if (= 1 (length (cdr datum)))
+                    (scheme-begin env (cadr datum))
+                    (scheme-begin (cons env (cdr datum)))
+                )
+               )
                (else (let ((proc (get-proc datum env)))
                        (if (procedure? proc)
                            (proc 'call '() (map-eval env (cdr datum)))
@@ -50,7 +60,7 @@
 )
 
 (define (call-define args env)
-  (begin (scheme-define env args 'from-call-define)
+  (begin (scheme-define 'call-from-eval env args)
          (car args)
   )
 )
@@ -72,7 +82,10 @@
 ; Implements the begin form, which consists of a sequence of
 ; expressions.
 (define (scheme-begin env . args)
-  (begin-helper env args)
+  (if (list? env)
+      (begin-helper (car env) (cdr env))
+      (begin-helper env args)
+  )
 )
 
 (define (begin-helper env args)
@@ -216,13 +229,11 @@
 ; For procedure definitions, use lambda-procedure to create the actual
 ; representation of the procedure.
 (define (scheme-define env . args)
-  (display args)
-  (newline)
   (let ((key (get-key args))
         (value (get-value args)))
-      (if (list? key)
+    (if (list? key)
         (define-insert (car key) (lambda-procedure (car key) (cdr key) value env) env)
-        (define-insert key value env)
+        (define-insert key (scheme-eval value env) env)
     )
   )
 )
