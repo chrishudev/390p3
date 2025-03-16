@@ -12,6 +12,8 @@
 
 ; Evaluates the given expression in the given environment.
 (define (scheme-eval datum env)
+  (display datum)
+  (newline)
    (cond ((or (number? datum)     ; self-evaluating objects
              (boolean? datum)
              (char? datum)
@@ -27,21 +29,27 @@
          ; message to the host procedure, along with the necessary
          ; arguments, to invoke it.
          (cond ((equal? 'define (car datum))
-                (scheme-define env (cadr datum) (caddr datum))
+                (scheme-define env (cadr datum) (caddr datum)) ; fix this to match begin!!!
                 (if (list? (cadr datum))
                     (caadr datum)
                     (cadr datum)
                 )
-               )
+               ) ; scheme-define
                ((equal? 'begin (car datum))
-                (if (= 1 (length (cdr datum)))
-                    (scheme-begin env (cadr datum))
-                    (scheme-begin (cons env (cdr datum)))
-                )
+                (scheme-begin (cons env (cdr datum)))
+               ) ; scheme-begin
+               ((equal? 'if (car datum))
+                (scheme-if (cons env (cdr datum)))
+               ) ; scheme-if
+               ((equal? 'quote (car datum))
+                (scheme-quote (cons env (cdr datum)))
+               ) ; scheme-quote
+               ((equal? 'lambda (car datum))
+                (scheme-lambda (cons env (cdr datum)))
                )
                (else (let ((proc (get-proc datum env)))
                        (if (procedure? proc)
-                           (proc 'call '() (map-eval env (cdr datum)))
+                           (proc 'call '() (map-eval env (cdr datum))) ; fix this to match begin!!!
                            (error "not a procedure" proc)
                        ); if
                      ); let
@@ -101,6 +109,13 @@
 ; Implements a conditional, with a test, a then expression, and an
 ; optional else expression.
 (define (scheme-if env . args)
+  (if (list? env)
+      (if-helper (car env) (cdr env))
+      (if-helper env args)
+  )
+)
+
+(define (if-helper env args)
   (let ((numargs (length args)))
     (cond ((< numargs 2) (error "too few arguments to if"))
           ((> numargs 3) (error "too many arguments to if"))
@@ -118,7 +133,10 @@
 
 ; Implements the quote form.
 (define (scheme-quote env . args)
-  (car args)
+  (if (list? env)
+      (cadr env)
+      (car args)
+  )
 )
 
 
@@ -215,7 +233,10 @@
 ; Use lambda-procedure to create the actual representation of the
 ; procedure.
 (define (scheme-lambda env . args)
-  (lambda-procedure "lambda" (car args) (cdr args) env)
+  (if (list? env)
+      (lambda-procedure 'lambda (cadr env) (caddr env) (car env))
+      (lambda-procedure 'lambda (car args) (cdr args) env)
+  )
 )
 
 
