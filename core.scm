@@ -28,7 +28,7 @@
          ; arguments, to invoke it.
          (let ((proc (get-proc datum env)))
            (if (procedure? proc)
-               (proc 'call '() (map-eval env (cdr datum)))
+               (proc 'call '() (map-eval env (cdr datum))) ; need to scheme-eval all values of cdr datum
                (error "not a procedure" proc)
            )
          )
@@ -77,11 +77,17 @@
 ; Implements a conditional, with a test, a then expression, and an
 ; optional else expression.
 (define (scheme-if env . args)
-  (if (scheme-eval (car args) env)
-      (cadr args)
-      (if (> (length args) 2)
-          (scheme-eval (caddr args) env)
-      )
+  (let ((numargs (length args)))
+    (cond ((< numargs 2) (error "too few arguments to if"))
+          ((> numargs 3) (error "too many arguments to if"))
+          (else (if (scheme-eval (car args) env)
+                    (scheme-eval (cadr args) env)
+                    (if (> numargs 2)
+                        (scheme-eval (caddr args) env)
+                    )
+                )
+         )
+    )
   )
 )
 
@@ -115,7 +121,7 @@
 ; where <name> is the name passed in to primitive-procedure.
 (define (lambda-procedure name formals body parent-env)
   (let ((nm name)
-        (frmls formals)
+        (frmls (check-formals (dictionary) formals formals))
         (bd body)
         (prnt parent-env))
     (lambda (message . args)
@@ -135,10 +141,26 @@
   ) ; let
 ) ; define
 
+(define (check-formals dict formals frmls)
+  (cond ((null? formals) frmls)
+        ((not (symbol? (car formals))) (error "unexpected formal" (car formals)))
+        ((dict 'contains (car formals)) (error "unexpected repeat" (car formals)))
+        (else (begin (dict 'insert (car formals) 1)
+                     (check-formals dict (cdr formals) frmls)
+              )
+       )
+ )
+)
+
 (define (body-call prev body env)
-  (if (= 1 (length body))
-      (scheme-eval (car body) env)
-      (body-call (scheme-eval (car body) env) (cdr body) env)
+  (if (null? body)
+      prev
+      (let ((cur (scheme-eval (car body) env)))
+        (if (procedure? cur)
+            (scheme-eval body env)
+            (body-call cur (cdr body) env)
+        )
+      )
   )
 )
 
@@ -183,8 +205,8 @@
 ; For procedure definitions, use lambda-procedure to create the actual
 ; representation of the procedure.
 (define (scheme-define env . args)
-  (let ((key (car args))
-        (value (cadr args)))
+  (let ((key (get-key args))
+        (value (get-value args)))
     (if (list? key)
         (define-insert (car key) (lambda-procedure (car key) (cdr key) value env) env)
         (define-insert key value env)
@@ -195,6 +217,22 @@
 (define (define-insert key value env)
   (env 'insert key value)
   value
+)
+
+(define (get-key args)
+  (let ((key (car args)))
+    (cond ((and (list? key) (symbol? (car key))) key)
+          ((symbol? key) key)
+          (else (error "tried to define non-symbol"))
+    )
+  )
+)
+
+(define (get-value args)
+  (if (= 2 (length args))
+      (cadr args)
+      (error "too many arguments to scheme-define")
+  )
 )
 
 
