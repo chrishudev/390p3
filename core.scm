@@ -12,7 +12,7 @@
 
 ; Evaluates the given expression in the given environment.
 (define (scheme-eval datum env)
-  (cond ((or (number? datum)     ; self-evaluating objects
+   (cond ((or (number? datum)     ; self-evaluating objects
              (boolean? datum)
              (char? datum)
              (string? datum)
@@ -26,12 +26,17 @@
          ; special form. Use procedure? to check this. Send the 'call
          ; message to the host procedure, along with the necessary
          ; arguments, to invoke it.
-         (let ((proc (get-proc datum env)))
-           (if (procedure? proc)
-               (proc 'call '() (map-eval env (cdr datum))) ; need to scheme-eval all values of cdr datum
-               (error "not a procedure" proc)
-           )
-         )
+         ;(display datum)
+         ;(newline)
+         (cond ((equal? 'define (car datum)) (call-define (cdr datum) env))
+               (else (let ((proc (get-proc datum env)))
+                       (if (procedure? proc)
+                           (proc 'call '() (map-eval env (cdr datum)))
+                           (error "not a procedure" proc)
+                       ); if
+                     ); let
+               ); else
+        ); cond
         )
         ; Add a case for symbols (identifiers) here.
         ((symbol? datum)
@@ -41,6 +46,12 @@
          )
         )
         (else (error "cannot evaluate" datum))
+  )
+)
+
+(define (call-define args env)
+  (begin (scheme-define env args 'from-call-define)
+         (car args)
   )
 )
 
@@ -149,7 +160,7 @@
                      (check-formals dict (cdr formals) frmls)
               )
        )
- )
+  )
 )
 
 (define (body-call prev body env)
@@ -205,9 +216,11 @@
 ; For procedure definitions, use lambda-procedure to create the actual
 ; representation of the procedure.
 (define (scheme-define env . args)
+  (display args)
+  (newline)
   (let ((key (get-key args))
         (value (get-value args)))
-    (if (list? key)
+      (if (list? key)
         (define-insert (car key) (lambda-procedure (car key) (cdr key) value env) env)
         (define-insert key value env)
     )
@@ -231,7 +244,7 @@
 (define (get-value args)
   (if (= 2 (length args))
       (cadr args)
-      (error "too many arguments to scheme-define")
+      (error "arity-error in scheme-define")
   )
 )
 
