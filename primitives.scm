@@ -130,7 +130,7 @@
   (let ((tc (type-checked name arg-count test typename impl)))
     (lambda (message . args)
       (case message
-        (call (let ((arg-list (map-eval (car args) (cdr args))))
+        (call (let ((arg-list (get-args args)))
                 (if (= 0 (cadr arg-list))
                     (error "cannot divide by zero")
                     (tc 'call arg-list)
