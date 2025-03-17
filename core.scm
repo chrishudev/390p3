@@ -33,6 +33,9 @@
                     (cadr datum)
                 )
                ) ; define
+               ((equal? 'lambda (car datum))
+                (lambda-from-eval datum env)
+               )
                ((equal? 'if (car datum))
                 (scheme-if (cons env (cdr datum)))
                ) ; scheme-if
@@ -40,13 +43,10 @@
                 (scheme-quote (cons env (cdr datum)))
                ) ; scheme-quote
                (else
-                (display "calling from eval:")
-                (display datum)
-                (newline)
-                ((get-proc datum env) 'call env 'call-from-eval (cdr datum))
-                (display "finished calling:")
-                (display datum)
-                (newline)
+                (let ((proc (car datum))
+                       (args (cdr datum)))
+                  ((get-proc proc env) 'call env 'call-from-eval (map-eval env args))
+                )
                ); else
         ); cond
         )
@@ -67,20 +67,20 @@
   )
 )
 
-(define (get-proc datum env)
-  (display "get-proc:")
-  (display datum)
-  (newline)
-  (cond ((null? datum) (error "cannot evaluate null"))
-        ((procedure? (car datum)) (car datum))
-        ((list? (car datum)) (scheme-eval (car datum) env))
-        ((symbol? (car datum)) (if (env 'contains (car datum))
-                                   (env 'get (car datum))
-                                   (error "unknown procedure symbol" (car datum))
-                               )
+(define (get-proc proc env)
+  (cond ((procedure? proc) proc)
+        ((list? proc) (scheme-eval proc env))
+        ((symbol? proc) (if (env 'contains proc)
+                            (env 'get proc)
+                            (error "unknown procedure symbol" proc)
+                        )
         )
-        (else (error "cannot evaluate procedure" datum))
+        (else (error "cannot evaluate procedure" proc))
   )
+)
+
+(define (not-void? datum)
+  (or (number? datum) (boolean? datum) (char? datum) (string? datum) (procedure? datum) (list? datum) (symbol? datum))
 )
 
 ; Implements the begin form, which consists of a sequence of
@@ -95,7 +95,10 @@
 (define (begin-helper prev env args)
   (if (null? args)
       prev
-      (begin-helper (scheme-eval (car args) env) env (cdr args))
+      (if (not-void? (car args))
+          (begin-helper (scheme-eval (car args) env) env (cdr args))
+          (begin-helper (car args) env (cdr args))
+      )
   )
 )
 
@@ -161,8 +164,6 @@
         (bd body)
         (prnt parent-env))
     (lambda (message . args)
-        (display args)
-        (newline)
       (case message
         ('call (let ((arg-list (get-args args)))
                  (if (= (length frmls) (length arg-list))
@@ -233,9 +234,6 @@
 ; Use lambda-procedure to create the actual representation of the
 ; procedure.
 (define (scheme-lambda env . args)
-  (display "lambda call:")
-  (display (cadr args))
-  (newline)
   (if (equal? (car args) 'call-from-eval)
       (lambda-from-eval (cadr args) env)
       (lambda-procedure 'lambda (car args) (cdr args) env)
