@@ -12,8 +12,6 @@
 
 ; Evaluates the given expression in the given environment.
 (define (scheme-eval datum env)
-  (display datum)
-  (newline)
    (cond ((or (number? datum)     ; self-evaluating objects
              (boolean? datum)
              (char? datum)
@@ -29,30 +27,26 @@
          ; message to the host procedure, along with the necessary
          ; arguments, to invoke it.
          (cond ((equal? 'define (car datum))
-                (scheme-define env (cadr datum) (caddr datum)) ; fix this to match begin!!!
+                (scheme-define env (cadr datum) 'call-from-eval (cddr datum))
                 (if (list? (cadr datum))
                     (caadr datum)
                     (cadr datum)
                 )
-               ) ; scheme-define
-               ((equal? 'begin (car datum))
-                (scheme-begin (cons env (cdr datum)))
-               ) ; scheme-begin
+               ) ; define
                ((equal? 'if (car datum))
                 (scheme-if (cons env (cdr datum)))
                ) ; scheme-if
                ((equal? 'quote (car datum))
                 (scheme-quote (cons env (cdr datum)))
                ) ; scheme-quote
-               ((equal? 'lambda (car datum))
-                (scheme-lambda (cons env (cdr datum)))
-               )
-               (else (let ((proc (get-proc datum env)))
-                       (if (procedure? proc)
-                           (proc 'call '() (map-eval env (cdr datum))) ; fix this to match begin!!!
-                           (error "not a procedure" proc)
-                       ); if
-                     ); let
+               (else
+                (display "calling from eval:")
+                (display datum)
+                (newline)
+                ((get-proc datum env) 'call env 'call-from-eval (cdr datum))
+                (display "finished calling:")
+                (display datum)
+                (newline)
                ); else
         ); cond
         )
@@ -74,6 +68,9 @@
 )
 
 (define (get-proc datum env)
+  (display "get-proc:")
+  (display datum)
+  (newline)
   (cond ((null? datum) (error "cannot evaluate null"))
         ((procedure? (car datum)) (car datum))
         ((list? (car datum)) (scheme-eval (car datum) env))
@@ -86,22 +83,19 @@
   )
 )
 
-
 ; Implements the begin form, which consists of a sequence of
 ; expressions.
 (define (scheme-begin env . args)
-  (if (list? env)
-      (begin-helper (car env) (cdr env))
-      (begin-helper env args)
+  (if (equal? (car args) 'call-from-eval)
+      (begin-helper '() env (cadr args))
+      (begin-helper '() env args)
   )
 )
 
-(define (begin-helper env args)
-  (if (= 1 (length args))
-      (scheme-eval (car args) env)
-      (begin (scheme-eval (car args) env)
-             (begin-helper env (cdr args)) 
-      )
+(define (begin-helper prev env args)
+  (if (null? args)
+      prev
+      (begin-helper (scheme-eval (car args) env) env (cdr args))
   )
 )
 
@@ -167,6 +161,8 @@
         (bd body)
         (prnt parent-env))
     (lambda (message . args)
+        (display args)
+        (newline)
       (case message
         ('call (let ((arg-list (get-args args)))
                  (if (= (length frmls) (length arg-list))
@@ -192,6 +188,10 @@
               )
        )
   )
+)
+
+(define (lambda-from-eval args parent-env)
+  (lambda-procedure 'lambda (car args) (cdr args) parent-env)
 )
 
 (define (body-call prev body env)
@@ -233,8 +233,11 @@
 ; Use lambda-procedure to create the actual representation of the
 ; procedure.
 (define (scheme-lambda env . args)
-  (if (list? env)
-      (lambda-procedure 'lambda (cadr env) (caddr env) (car env))
+  (display "lambda call:")
+  (display (cadr args))
+  (newline)
+  (if (equal? (car args) 'call-from-eval)
+      (lambda-from-eval (cadr args) env)
       (lambda-procedure 'lambda (car args) (cdr args) env)
   )
 )
@@ -250,8 +253,8 @@
 ; For procedure definitions, use lambda-procedure to create the actual
 ; representation of the procedure.
 (define (scheme-define env . args)
-  (let ((key (get-key args))
-        (value (get-value args)))
+  (let ((key (get-key (car args)))
+        (value (get-value (cdr args))))
     (if (list? key)
         (define-insert (car key) (lambda-procedure (car key) (cdr key) value env) env)
         (define-insert key (scheme-eval value env) env)
@@ -264,19 +267,20 @@
   value
 )
 
-(define (get-key args)
-  (let ((key (car args)))
-    (cond ((and (list? key) (symbol? (car key))) key)
-          ((symbol? key) key)
-          (else (error "tried to define non-symbol"))
-    )
+(define (get-key key)
+  (cond ((and (list? key) (symbol? (car key))) key)
+        ((symbol? key) key)
+        (else (error "tried to define non-symbol"))
   )
 )
 
 (define (get-value args)
-  (if (= 2 (length args))
-      (cadr args)
-      (error "arity-error in scheme-define")
+  (if (equal? (car args) 'call-from-eval)
+      (get-value (cadr args))
+      (if (= 1 (length args))
+          (car args)
+          (arity-error 'define 1 (length args))
+      )
   )
 )
 

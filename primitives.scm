@@ -96,8 +96,8 @@
 ); define
 
 (define (get-args args)
-  (cond ((null? (car args)) (cadr args)) ; call from scheme-eval
-        ((list? (car args)) (car args)) ; call from divide-checked
+  (cond ((equal? 'call-from-eval (cadr args)) (map-eval (car args) (caddr args)))
+        ((equal? 'call-from-divide (car args)) (cadr args))
         (else (map-eval (car args) (cdr args))) ; local call
   )
 )
@@ -133,7 +133,7 @@
         (call (let ((arg-list (get-args args)))
                 (if (= 0 (cadr arg-list))
                     (error "cannot divide by zero")
-                    (tc 'call arg-list)
+                    (tc 'call 'call-from-divide arg-list)
                 )
               )
         )
