@@ -12,7 +12,7 @@
 
 ; Evaluates the given expression in the given environment.
 (define (scheme-eval datum env)
-   (cond ((or (number? datum)     ; self-evaluating objects
+  (cond ((or (number? datum)     ; self-evaluating objects
              (boolean? datum)
              (char? datum)
              (string? datum)
@@ -33,9 +33,6 @@
                     (cadr datum)
                 )
                ) ; define
-               ((equal? 'lambda (car datum))
-                (lambda-from-eval datum env)
-               )
                ((equal? 'if (car datum))
                 (scheme-if (cons env (cdr datum)))
                ) ; scheme-if
@@ -43,9 +40,9 @@
                 (scheme-quote (cons env (cdr datum)))
                ) ; scheme-quote
                (else
-                (let ((proc (car datum))
-                       (args (cdr datum)))
-                  ((get-proc proc env) 'call env 'call-from-eval (map-eval env args))
+                (let ((proc (get-proc datum env))
+                      (args (cdr datum)))
+                  (proc 'call env 'call-from-eval args)
                 )
                ); else
         ); cond
@@ -58,27 +55,24 @@
          )
         )
         (else (error "cannot evaluate" datum))
-  )
+ )
 )
 
-(define (call-define args env)
-  (begin (scheme-define 'call-from-eval env args)
-         (car args)
-  )
-)
-
-(define (get-proc proc env)
-  (cond ((procedure? proc) proc)
-        ((list? proc) (scheme-eval proc env))
-        ((symbol? proc) (if (env 'contains proc)
-                            (env 'get proc)
-                            (error "unknown procedure symbol" proc)
-                        )
+; gets procedure from datum
+(define (get-proc datum env)
+  (cond ((null? datum) (error "cannot evaluate null"))
+        ((procedure? (car datum)) (car datum))
+        ((list? (car datum)) (scheme-eval (car datum) env))
+        ((symbol? (car datum)) (if (env 'contains (car datum))
+                                   (env 'get (car datum))
+                                   (error "unknown procedure symbol" (car datum))
+                               )
         )
-        (else (error "cannot evaluate procedure" proc))
+        (else (error "cannot evaluate procedure" datum))
   )
 )
 
+; returns true if datume is not #<void>
 (define (not-void? datum)
   (or (number? datum) (boolean? datum) (char? datum) (string? datum) (procedure? datum) (list? datum) (symbol? datum))
 )
@@ -92,6 +86,7 @@
   )
 )
 
+; begin driver that runs through all statements
 (define (begin-helper prev env args)
   (if (null? args)
       prev
@@ -112,6 +107,7 @@
   )
 )
 
+; if driver that checks the number of arguments & evaluates the if statement
 (define (if-helper env args)
   (let ((numargs (length args)))
     (cond ((< numargs 2) (error "too few arguments to if"))
@@ -180,6 +176,7 @@
   ) ; let
 ) ; define
 
+; check to make sure that formals are unique
 (define (check-formals dict formals frmls)
   (cond ((null? formals) frmls)
         ((not (symbol? (car formals))) (error "unexpected formal" (car formals)))
@@ -191,36 +188,26 @@
   )
 )
 
-(define (lambda-from-eval args parent-env)
-  (lambda-procedure 'lambda (car args) (cdr args) parent-env)
-)
-
+; body-call -- calls each statement in function & returns last value
 (define (body-call prev body env)
-  (if (null? body)
-      prev
-      (let ((cur (scheme-eval (car body) env)))
-        (if (procedure? cur)
-            (scheme-eval body env)
-            (body-call cur (cdr body) env)
+  (cond ((null? body) prev)
+        ((equal? (car body) 'call-from-eval) (body-call '() (cdr body) env))
+        (else (let ((cur (scheme-eval (car body) env)))
+                (if (procedure? cur)
+                    (scheme-eval body env)
+                    (body-call cur (cdr body) env)
+                )
+              )
         )
-      )
   )
 )
 
+; adds args to frm as (frml . arg) pairs
 (define (lambda-args frm frmls args)
   (if (null? args)
       frm
       (begin (frm 'insert (car frmls) (car args))
              (lambda-args frm (cdr frmls) (cdr args))
-      )
-  )
-)
-
-(define (eval-args frame env formals args)
-  (if (null? args)
-      frame
-      (begin (frame 'insert (car formals) (car args))
-             (eval-args frame env (cdr formals) (cdr args))
       )
   )
 )
@@ -235,7 +222,7 @@
 ; procedure.
 (define (scheme-lambda env . args)
   (if (equal? (car args) 'call-from-eval)
-      (lambda-from-eval (cadr args) env)
+      (lambda-procedure 'lambda (caadr args) (cdadr args) env)
       (lambda-procedure 'lambda (car args) (cdr args) env)
   )
 )
@@ -260,11 +247,13 @@
   )
 )
 
+; inserts (key . value) into frame & returns value
 (define (define-insert key value env)
   (env 'insert key value)
   value
 )
 
+; gets key from args
 (define (get-key key)
   (cond ((and (list? key) (symbol? (car key))) key)
         ((symbol? key) key)
@@ -272,6 +261,7 @@
   )
 )
 
+; gets value from args
 (define (get-value args)
   (if (equal? (car args) 'call-from-eval)
       (get-value (cadr args))
